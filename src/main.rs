@@ -145,28 +145,148 @@ fn generate_output_path(path: &Path, suffix: &str) -> PathBuf {
     parent.join(format!("{}.{}.{}", file_stem, suffix, extension))
 }
 
+fn minify_html(content: &str) -> String {
+    let mut result = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    let mut in_tag = false;
+    let mut in_script = false;
+    let mut in_style = false;
+    let mut in_pre = false;
+    let mut in_textarea = false;
+    let mut in_template_brace = false; // {{ }}
+    let mut in_template_chevron = false; // {% %}
+    let mut last_was_space = false;
+    let mut tag_name = String::new();
+
+    while let Some(ch) = chars.next() {
+        // 检测模板语法开始
+        if ch == '{' {
+            if let Some(&next_ch) = chars.peek() {
+                if next_ch == '{' {
+                    in_template_brace = true;
+                    result.push(ch);
+                    continue;
+                } else if next_ch == '%' {
+                    in_template_chevron = true;
+                    result.push(ch);
+                    continue;
+                }
+            }
+        }
+
+        // 在模板语法内，保持原样
+        if in_template_brace || in_template_chevron {
+            result.push(ch);
+            // 检测模板语法结束
+            if in_template_brace && ch == '}' && result.ends_with("}}") {
+                in_template_brace = false;
+            } else if in_template_chevron && ch == '}' && result.ends_with("%}") {
+                in_template_chevron = false;
+            }
+            last_was_space = false;
+            continue;
+        }
+
+        // HTML 注释处理
+        if ch == '<' && chars.peek() == Some(&'!') {
+            let mut comment = String::from("<");
+            comment.push(chars.next().unwrap()); // '!'
+
+            if chars.peek() == Some(&'-') {
+                comment.push(chars.next().unwrap()); // first '-'
+                if chars.peek() == Some(&'-') {
+                    comment.push(chars.next().unwrap()); // second '-'
+                    // 这是一个注释，跳过直到 -->
+                    while let Some(c) = chars.next() {
+                        comment.push(c);
+                        if comment.ends_with("-->") {
+                            break;
+                        }
+                    }
+                    last_was_space = false;
+                    continue; // 跳过注释
+                }
+            }
+            result.push_str(&comment);
+            continue;
+        }
+
+        // 标签处理
+        if ch == '<' {
+            in_tag = true;
+            tag_name.clear();
+            result.push(ch);
+            last_was_space = false;
+
+            // 读取标签名
+            while let Some(&next_ch) = chars.peek() {
+                if next_ch.is_whitespace() || next_ch == '>' || next_ch == '/' {
+                    break;
+                }
+                tag_name.push(chars.next().unwrap().to_ascii_lowercase());
+            }
+
+            result.push_str(&tag_name);
+
+            // 检查特殊标签
+            if tag_name == "script" {
+                in_script = true;
+            } else if tag_name == "style" {
+                in_style = true;
+            } else if tag_name == "pre" {
+                in_pre = true;
+            } else if tag_name == "textarea" {
+                in_textarea = true;
+            } else if tag_name == "/script" {
+                in_script = false;
+            } else if tag_name == "/style" {
+                in_style = false;
+            } else if tag_name == "/pre" {
+                in_pre = false;
+            } else if tag_name == "/textarea" {
+                in_textarea = false;
+            }
+            continue;
+        }
+
+        if ch == '>' {
+            in_tag = false;
+            result.push(ch);
+            last_was_space = false;
+            continue;
+        }
+
+        // 在标签内、script、style、pre、textarea 内保留空格
+        if in_tag || in_script || in_style || in_pre || in_textarea {
+            if ch.is_whitespace() {
+                if !last_was_space {
+                    result.push(' ');
+                    last_was_space = true;
+                }
+            } else {
+                result.push(ch);
+                last_was_space = false;
+            }
+        } else {
+            // 标签外的内容
+            if ch.is_whitespace() {
+                if !last_was_space && !result.is_empty() {
+                    result.push(' ');
+                    last_was_space = true;
+                }
+            } else {
+                result.push(ch);
+                last_was_space = false;
+            }
+        }
+    }
+
+    result
+}
+
 fn minify_file(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let content = fs::read(input_path)?;
-
-    let cfg = minify_html::Cfg {
-        minify_doctype: false,
-        allow_noncompliant_unquoted_attribute_values: false,
-        allow_optimal_entities: true,
-        allow_removing_spaces_between_attributes: true,
-        keep_closing_tags: false,
-        keep_comments: false,
-        keep_html_and_head_opening_tags: false,
-        keep_input_type_text_attr: false,
-        keep_ssi_comments: false,
-        minify_css: true,
-        minify_js: true,
-        preserve_brace_template_syntax: true,
-        preserve_chevron_percent_template_syntax: true,
-        remove_bangs: false,
-        remove_processing_instructions: false,
-    };
-
-    let minified = minify_html::minify(&content, &cfg);
+    let content = fs::read_to_string(input_path)?;
+    let minified = minify_html(&content);
     fs::write(output_path, minified)?;
     Ok(())
 }
