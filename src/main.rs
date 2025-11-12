@@ -12,13 +12,17 @@ struct Args {
     #[arg(value_name = "PATH")]
     path: PathBuf,
 
-    /// 是否覆盖原文件（默认创建 .min.html 文件）
-    #[arg(short, long)]
-    overwrite: bool,
-
     /// 递归处理文件夹（默认启用）
     #[arg(short, long, default_value_t = true)]
     recursive: bool,
+
+    /// 输出文件或文件夹路径（如果已存在则报错）
+    #[arg(short = 'd', long)]
+    output: Option<PathBuf>,
+
+    /// 输出文件的后缀名（例如: "min" 会生成 .min.html）
+    #[arg(short = 's', long, default_value = "min")]
+    suffix: String,
 }
 
 fn main() {
@@ -37,10 +41,31 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("路径不存在: {}", path.display()).into());
     }
 
+    // 验证输出路径
+    if let Some(ref output) = args.output {
+        if output.exists() {
+            return Err(format!("输出路径已存在: {}", output.display()).into());
+        }
+    }
+
     if path.is_file() {
-        minify_file(path, args.overwrite)?;
-        println!("✓ 已压缩: {}", path.display());
+        let output_path = if let Some(ref output) = args.output {
+            output.clone()
+        } else {
+            generate_output_path(path, &args.suffix)
+        };
+
+        minify_file(path, &output_path)?;
+        println!("✓ 已压缩: {} -> {}", path.display(), output_path.display());
     } else if path.is_dir() {
+        let output_dir = if let Some(ref output) = args.output {
+            // 创建输出目录
+            fs::create_dir_all(output)?;
+            output.clone()
+        } else {
+            path.to_path_buf()
+        };
+
         let mut count = 0;
         let walker = if args.recursive {
             WalkDir::new(path)
@@ -51,9 +76,28 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         for entry in walker.into_iter().filter_map(|e| e.ok()) {
             let file_path = entry.path();
             if file_path.is_file() && is_template_file(file_path) {
-                match minify_file(file_path, args.overwrite) {
+                let output_path = if args.output.is_some() {
+                    // 保持相对路径结构
+                    let relative = file_path.strip_prefix(path).unwrap();
+                    let target = output_dir.join(relative);
+
+                    // 创建父目录
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+
+                    generate_output_path(&target, &args.suffix)
+                } else {
+                    generate_output_path(file_path, &args.suffix)
+                };
+
+                match minify_file(file_path, &output_path) {
                     Ok(_) => {
-                        println!("✓ 已压缩: {}", file_path.display());
+                        println!(
+                            "✓ 已压缩: {} -> {}",
+                            file_path.display(),
+                            output_path.display()
+                        );
                         count += 1;
                     }
                     Err(e) => {
@@ -84,8 +128,15 @@ fn is_template_file(path: &Path) -> bool {
     }
 }
 
-fn minify_file(path: &Path, overwrite: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let content = fs::read(path)?;
+fn generate_output_path(path: &Path, suffix: &str) -> PathBuf {
+    let file_stem = path.file_stem().unwrap().to_string_lossy();
+    let extension = path.extension().unwrap_or_default().to_string_lossy();
+    let parent = path.parent().unwrap_or(Path::new("."));
+    parent.join(format!("{}.{}.{}", file_stem, suffix, extension))
+}
+
+fn minify_file(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let content = fs::read(input_path)?;
 
     let cfg = minify_html::Cfg {
         minify_doctype: false,
@@ -106,16 +157,6 @@ fn minify_file(path: &Path, overwrite: bool) -> Result<(), Box<dyn std::error::E
     };
 
     let minified = minify_html::minify(&content, &cfg);
-
-    let output_path = if overwrite {
-        path.to_path_buf()
-    } else {
-        let file_stem = path.file_stem().unwrap().to_string_lossy();
-        let extension = path.extension().unwrap_or_default().to_string_lossy();
-        let parent = path.parent().unwrap_or(Path::new("."));
-        parent.join(format!("{}.min.{}", file_stem, extension))
-    };
-
-    fs::write(&output_path, minified)?;
+    fs::write(output_path, minified)?;
     Ok(())
 }

@@ -10,6 +10,7 @@
 - 移除不必要的空格和注释
 - 支持单文件或文件夹批量处理
 - 递归处理子文件夹
+- 自定义输出路径和文件后缀名
 
 ## 安装
 
@@ -23,7 +24,7 @@ cargo build --release
 
 ### 基本用法
 
-压缩单个文件（生成 `.min.html` 文件）：
+压缩单个文件（默认生成 `.min.html` 文件）：
 ```bash
 askama-minify template.html
 ```
@@ -35,24 +36,45 @@ askama-minify templates/
 
 ### 选项
 
-- `-o, --overwrite`: 覆盖原文件（默认生成 `.min.html` 文件）
+- `-d, --output <OUTPUT>`: 指定输出文件或文件夹路径（如果已存在则报错）
+- `-s, --suffix <SUFFIX>`: 输出文件的后缀名（默认: `min`，生成 `.min.html`）
 - `-r, --recursive`: 递归处理子文件夹（默认启用）
 - `-h, --help`: 显示帮助信息
 - `-V, --version`: 显示版本信息
 
 ### 示例
 
-覆盖原文件：
+**基础压缩**（生成 `template.min.html`）：
 ```bash
-askama-minify -o template.html
+askama-minify template.html
 ```
 
-不递归处理子文件夹：
+**自定义后缀名**（生成 `template.compressed.html`）：
+```bash
+askama-minify -s compressed template.html
+```
+
+**指定输出文件**：
+```bash
+askama-minify -d output.html template.html
+```
+
+**指定输出文件夹**（保持目录结构）：
+```bash
+askama-minify -d output_dir/ templates/
+```
+
+**自定义后缀压缩文件夹**：
+```bash
+askama-minify -s prod templates/
+```
+
+**不递归处理子文件夹**：
 ```bash
 askama-minify --recursive=false templates/
 ```
 
-查看文件大小对比：
+**查看文件大小对比**：
 ```bash
 # 原始文件
 ls -lh test_templates/example.html
@@ -71,12 +93,14 @@ ls -lh test_templates/example.min.html
 
 该工具使用以下压缩配置：
 
-- 保留 DOCTYPE 声明
+- 保留 DOCTYPE 声明（不压缩）
 - 保留模板语法（`{{ }}` 和 `{% %}`）
 - 移除 HTML 注释
 - 压缩内联 CSS
 - 压缩内联 JavaScript
 - 移除属性间的多余空格
+- 移除可选的闭合标签
+- 移除可选的 HTML 和 HEAD 开始标签
 
 ## 示例
 
