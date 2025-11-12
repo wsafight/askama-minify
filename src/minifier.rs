@@ -1,5 +1,4 @@
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
-use minifier::js;
 
 /// 压缩 CSS 内容
 pub fn minify_css(css_code: &str) -> String {
@@ -23,11 +22,99 @@ pub fn minify_css(css_code: &str) -> String {
 }
 
 /// 压缩 JavaScript 内容
+/// 使用简单的空白压缩以避免破坏代码逻辑
 pub fn minify_js(js_code: &str) -> String {
-    let minified = js::minify(js_code);
-    let mut buf = Vec::new();
-    minified.write(&mut buf).ok();
-    String::from_utf8(buf).unwrap_or_else(|_| js_code.to_string())
+    let mut result = String::with_capacity(js_code.len());
+    let mut chars = js_code.chars().peekable();
+    let mut in_string = false;
+    let mut in_single_comment = false;
+    let mut in_multi_comment = false;
+    let mut string_char = '\0';
+    let mut last_char = '\0';
+    let mut last_was_space = false;
+
+    while let Some(ch) = chars.next() {
+        // 处理单行注释
+        if !in_string && !in_multi_comment && ch == '/' && chars.peek() == Some(&'/') {
+            in_single_comment = true;
+            chars.next(); // 跳过第二个 /
+            continue;
+        }
+
+        if in_single_comment {
+            if ch == '\n' {
+                in_single_comment = false;
+                // 保留换行（某些情况下需要）
+                if !last_was_space {
+                    result.push(' ');
+                    last_was_space = true;
+                }
+            }
+            continue;
+        }
+
+        // 处理多行注释
+        if !in_string && !in_single_comment && ch == '/' && chars.peek() == Some(&'*') {
+            in_multi_comment = true;
+            chars.next(); // 跳过 *
+            continue;
+        }
+
+        if in_multi_comment {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                in_multi_comment = false;
+                chars.next(); // 跳过 /
+                if !last_was_space {
+                    result.push(' ');
+                    last_was_space = true;
+                }
+            }
+            continue;
+        }
+
+        // 处理字符串
+        if ch == '"' || ch == '\'' || ch == '`' {
+            if !in_string {
+                in_string = true;
+                string_char = ch;
+            } else if ch == string_char && last_char != '\\' {
+                in_string = false;
+            }
+            result.push(ch);
+            last_char = ch;
+            last_was_space = false;
+            continue;
+        }
+
+        if in_string {
+            result.push(ch);
+            last_char = ch;
+            last_was_space = false;
+            continue;
+        }
+
+        // 压缩空白
+        if ch.is_whitespace() {
+            // 在某些情况下需要保留空格
+            let needs_space = match last_char {
+                'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '$' => {
+                    matches!(chars.peek(), Some(&c) if c.is_alphanumeric() || c == '_' || c == '$')
+                }
+                _ => false
+            };
+
+            if needs_space && !last_was_space {
+                result.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            result.push(ch);
+            last_char = ch;
+            last_was_space = false;
+        }
+    }
+
+    result
 }
 
 /// 压缩 HTML 内容，保留 Askama 模板语法
@@ -75,8 +162,8 @@ pub fn minify_html(content: &str) -> String {
             continue;
         }
 
-        // HTML 注释处理
-        if ch == '<' && chars.peek() == Some(&'!') {
+        // HTML 注释处理（只在不在 script/style 内时处理）
+        if !in_script && !in_style && ch == '<' && chars.peek() == Some(&'!') {
             let mut comment = String::from("<");
             comment.push(chars.next().unwrap()); // '!'
 
@@ -101,6 +188,22 @@ pub fn minify_html(content: &str) -> String {
 
         // 标签处理
         if ch == '<' {
+            // 在 script/style 内，只处理结束标签
+            if in_script || in_style {
+                // 检查是否是结束标签
+                if chars.peek() == Some(&'/') {
+                    // 可能是 </script> 或 </style>，需要处理
+                } else {
+                    // 不是结束标签，收集为内容
+                    if in_script {
+                        script_content.push(ch);
+                    } else {
+                        style_content.push(ch);
+                    }
+                    last_was_space = false;
+                    continue;
+                }
+            }
             in_tag = true;
             tag_name.clear();
             result.push(ch);
@@ -167,6 +270,19 @@ pub fn minify_html(content: &str) -> String {
             continue;
         }
 
+        // 在 script 和 style 内收集内容（必须在 > 检查之前，但要确保不在标签内）
+        if !in_tag {
+            if in_script {
+                script_content.push(ch);
+                last_was_space = false;
+                continue;
+            } else if in_style {
+                style_content.push(ch);
+                last_was_space = false;
+                continue;
+            }
+        }
+
         if ch == '>' {
             in_tag = false;
             result.push(ch);
@@ -177,16 +293,6 @@ pub fn minify_html(content: &str) -> String {
         // 在 pre 和 textarea 内完全保留原样
         if in_pre || in_textarea {
             result.push(ch);
-            last_was_space = false;
-        }
-        // 收集 script 内容（不直接输出，等待压缩）
-        else if in_script {
-            script_content.push(ch);
-            last_was_space = false;
-        }
-        // 收集 style 内容（不直接输出，等待压缩）
-        else if in_style {
-            style_content.push(ch);
             last_was_space = false;
         }
         // 在标签内压缩空格

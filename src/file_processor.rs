@@ -29,12 +29,14 @@ pub fn generate_output_path(path: &Path, suffix: &str) -> PathBuf {
     parent.join(format!("{}.{}.{}", file_stem, suffix, extension))
 }
 
-/// 压缩单个文件
-pub fn minify_file(input_path: &Path, output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+/// 压缩单个文件并返回文件大小信息
+pub fn minify_file(input_path: &Path, output_path: &Path) -> Result<(usize, usize), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(input_path)?;
+    let original_size = content.len();
     let minified = minifier::minify_html(&content);
+    let minified_size = minified.len();
     fs::write(output_path, minified)?;
-    Ok(())
+    Ok((original_size, minified_size))
 }
 
 /// 处理单个文件的压缩
@@ -51,8 +53,21 @@ pub fn process_single_file(
         generate_output_path(path, suffix)
     };
 
-    minify_file(path, &output_path)?;
-    println!("✓ 已压缩: {} -> {}", path.display(), output_path.display());
+    let (original_size, minified_size) = minify_file(path, &output_path)?;
+    let reduction = if original_size > 0 {
+        ((original_size - minified_size) as f64 / original_size as f64 * 100.0) as i32
+    } else {
+        0
+    };
+
+    println!(
+        "✓ 已压缩: {} -> {} ({} → {} bytes, -{}%)",
+        path.display(),
+        output_path.display(),
+        original_size,
+        minified_size,
+        reduction
+    );
     Ok(())
 }
 
@@ -72,6 +87,9 @@ pub fn process_directory(
     };
 
     let mut count = 0;
+    let mut total_original_size = 0;
+    let mut total_minified_size = 0;
+
     let walker = if recursive {
         WalkDir::new(path)
     } else {
@@ -104,13 +122,24 @@ pub fn process_directory(
             };
 
             match minify_file(file_path, &output_path) {
-                Ok(_) => {
+                Ok((original_size, minified_size)) => {
+                    let reduction = if original_size > 0 {
+                        ((original_size - minified_size) as f64 / original_size as f64 * 100.0) as i32
+                    } else {
+                        0
+                    };
+
                     println!(
-                        "✓ 已压缩: {} -> {}",
+                        "✓ 已压缩: {} -> {} ({} → {} bytes, -{}%)",
                         file_path.display(),
-                        output_path.display()
+                        output_path.display(),
+                        original_size,
+                        minified_size,
+                        reduction
                     );
                     count += 1;
+                    total_original_size += original_size;
+                    total_minified_size += minified_size;
                 }
                 Err(e) => {
                     eprintln!("✗ 压缩失败 {}: {}", file_path.display(), e);
@@ -118,7 +147,17 @@ pub fn process_directory(
             }
         }
     }
-    println!("\n总共压缩了 {} 个文件", count);
+
+    let total_reduction = if total_original_size > 0 {
+        ((total_original_size - total_minified_size) as f64 / total_original_size as f64 * 100.0) as i32
+    } else {
+        0
+    };
+
+    println!(
+        "\n总共压缩了 {} 个文件 ({} → {} bytes, 总压缩率: {}%)",
+        count, total_original_size, total_minified_size, total_reduction
+    );
     Ok(())
 }
 
