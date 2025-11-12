@@ -1,5 +1,7 @@
 # Askama Minify
 
+中文 | [English](README.en.md)
+
 一个用于压缩 Askama 模板文件的 CLI 工具。支持压缩单个文件或批量处理整个文件夹，提供专业级的 CSS 和 JavaScript 优化。
 
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
