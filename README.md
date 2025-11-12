@@ -20,6 +20,23 @@ cargo build --release
 
 编译后的二进制文件位于 `target/release/askama-minify`
 
+## 测试
+
+运行完整的测试套件：
+
+```bash
+./test.sh
+```
+
+测试脚本会验证：
+- 默认压缩行为
+- 自定义后缀
+- 指定输出路径
+- 文件夹批量处理
+- 递归子目录处理
+- 压缩效果（约 40% 压缩率）
+- Askama 模板语法保留
+
 ## 使用方法
 
 ### 基本用法
@@ -37,10 +54,17 @@ askama-minify templates/
 ### 选项
 
 - `-d, --output <OUTPUT>`: 指定输出文件或文件夹路径（如果已存在则报错）
-- `-s, --suffix <SUFFIX>`: 输出文件的后缀名（默认: `min`，生成 `.min.html`）
+- `-s, --suffix <SUFFIX>`: 输出文件的后缀名（不指定时：如果设置了 `-d` 则不添加后缀，否则默认使用 `min`）
 - `-r, --recursive`: 递归处理子文件夹（默认启用）
 - `-h, --help`: 显示帮助信息
 - `-V, --version`: 显示版本信息
+
+### 后缀规则
+
+- **未指定 `-d` 且未指定 `-s`**: 使用默认后缀 `min`，生成 `file.min.html`
+- **未指定 `-d` 但指定 `-s`**: 使用指定后缀，生成 `file.<suffix>.html`
+- **指定 `-d` 但未指定 `-s`**: 不添加后缀，直接使用指定的输出路径
+- **同时指定 `-d` 和 `-s`**: 在输出路径基础上添加指定后缀
 
 ### 示例
 
@@ -54,17 +78,22 @@ askama-minify template.html
 askama-minify -s compressed template.html
 ```
 
-**指定输出文件**：
+**指定输出文件**（不添加后缀）：
 ```bash
 askama-minify -d output.html template.html
 ```
 
-**指定输出文件夹**（保持目录结构）：
+**指定输出文件夹**（不添加后缀，保持目录结构）：
 ```bash
 askama-minify -d output_dir/ templates/
 ```
 
-**自定义后缀压缩文件夹**：
+**指定输出文件夹并添加后缀**：
+```bash
+askama-minify -d output_dir/ -s prod templates/
+```
+
+**自定义后缀压缩文件夹**（在原目录生成）：
 ```bash
 askama-minify -s prod templates/
 ```
@@ -74,12 +103,9 @@ askama-minify -s prod templates/
 askama-minify --recursive=false templates/
 ```
 
-**查看文件大小对比**：
+**查看帮助信息**：
 ```bash
-# 原始文件
-ls -lh test_templates/example.html
-# 压缩后（约减少 40%）
-ls -lh test_templates/example.min.html
+askama-minify --help
 ```
 
 ## 支持的文件类型

@@ -21,8 +21,9 @@ struct Args {
     output: Option<PathBuf>,
 
     /// 输出文件的后缀名（例如: "min" 会生成 .min.html）
-    #[arg(short = 's', long, default_value = "min")]
-    suffix: String,
+    /// 如果指定了 output 但未指定 suffix，则不添加后缀
+    #[arg(short = 's', long)]
+    suffix: Option<String>,
 }
 
 fn main() {
@@ -52,7 +53,9 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         let output_path = if let Some(ref output) = args.output {
             output.clone()
         } else {
-            generate_output_path(path, &args.suffix)
+            // 没有指定 output 时，使用 suffix（默认为 "min"）
+            let suffix = args.suffix.as_deref().unwrap_or("min");
+            generate_output_path(path, suffix)
         };
 
         minify_file(path, &output_path)?;
@@ -86,9 +89,16 @@ fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
                         fs::create_dir_all(parent)?;
                     }
 
-                    generate_output_path(&target, &args.suffix)
+                    // 如果指定了 output 但没有指定 suffix，则不添加后缀
+                    if let Some(ref suffix) = args.suffix {
+                        generate_output_path(&target, suffix)
+                    } else {
+                        target
+                    }
                 } else {
-                    generate_output_path(file_path, &args.suffix)
+                    // 没有指定 output 时，使用 suffix（默认为 "min"）
+                    let suffix = args.suffix.as_deref().unwrap_or("min");
+                    generate_output_path(file_path, suffix)
                 };
 
                 match minify_file(file_path, &output_path) {
