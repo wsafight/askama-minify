@@ -256,8 +256,13 @@ fn minify_html(content: &str) -> String {
             continue;
         }
 
-        // 在标签内、script、style、pre、textarea 内保留空格
-        if in_tag || in_script || in_style || in_pre || in_textarea {
+        // 在 pre 和 textarea 内完全保留原样
+        if in_pre || in_textarea {
+            result.push(ch);
+            last_was_space = false;
+        }
+        // 在标签内、script、style 内压缩空格
+        else if in_tag || in_script || in_style {
             if ch.is_whitespace() {
                 if !last_was_space {
                     result.push(' ');
