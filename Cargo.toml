@@ -1,7 +1,10 @@
 [package]
 name = "askama-minify"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
+authors = ["askama-minify contributors"]
+description = "A CLI tool for minifying Askama template files with intelligent comment removal and edge case handling"
+license = "MIT"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

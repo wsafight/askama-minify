@@ -12,12 +12,12 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "========================================"
-echo "  Askama Minify 测试脚本"
+echo "  Askama Minify v0.2.1 测试脚本"
 echo "========================================"
 echo ""
 
 # 编译项目
-echo -e "${YELLOW}[1/10] 编译项目...${NC}"
+echo -e "${YELLOW}[1/11] 编译项目...${NC}"
 cargo build --release
 echo -e "${GREEN}✓ 编译完成${NC}"
 echo ""
@@ -109,7 +109,7 @@ cp "$TEST_DIR/example.html" "$TEST_DIR/templates/example1.html"
 cp "$TEST_DIR/example.html" "$TEST_DIR/templates/example2.html"
 cp "$TEST_DIR/example.html" "$TEST_DIR/templates/sub/example3.html"
 
-echo -e "${YELLOW}[2/10] 测试场景 1: 默认行为（生成 .min.html）${NC}"
+echo -e "${YELLOW}[2/11] 测试场景 1: 默认行为（生成 .min.html）${NC}"
 $BIN "$TEST_DIR/example.html"
 if [ -f "$TEST_DIR/example.min.html" ]; then
     echo -e "${GREEN}✓ 生成了 example.min.html${NC}"
@@ -119,7 +119,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[3/10] 测试场景 2: 自定义后缀${NC}"
+echo -e "${YELLOW}[3/11] 测试场景 2: 自定义后缀${NC}"
 $BIN -s compressed "$TEST_DIR/example.html"
 if [ -f "$TEST_DIR/example.compressed.html" ]; then
     echo -e "${GREEN}✓ 生成了 example.compressed.html${NC}"
@@ -129,7 +129,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[4/10] 测试场景 3: 指定输出文件（不添加后缀）${NC}"
+echo -e "${YELLOW}[4/11] 测试场景 3: 指定输出文件（不添加后缀）${NC}"
 $BIN -d "$TEST_DIR/output.html" "$TEST_DIR/example.html"
 if [ -f "$TEST_DIR/output.html" ]; then
     echo -e "${GREEN}✓ 生成了 output.html（无后缀）${NC}"
@@ -139,7 +139,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[5/10] 测试场景 4: 文件夹压缩（默认后缀 min）${NC}"
+echo -e "${YELLOW}[5/11] 测试场景 4: 文件夹压缩（默认后缀 min）${NC}"
 $BIN "$TEST_DIR/templates/"
 if [ -f "$TEST_DIR/templates/example1.min.html" ] && \
    [ -f "$TEST_DIR/templates/example2.min.html" ] && \
@@ -151,7 +151,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[6/10] 测试场景 5: 文件夹输出到指定目录（不添加后缀）${NC}"
+echo -e "${YELLOW}[6/11] 测试场景 5: 文件夹输出到指定目录（不添加后缀）${NC}"
 $BIN -d "$TEST_DIR/output_dir" "$TEST_DIR/templates/"
 if [ -f "$TEST_DIR/output_dir/example1.html" ] && \
    [ -f "$TEST_DIR/output_dir/example2.html" ] && \
@@ -163,7 +163,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[7/10] 测试场景 6: 文件夹输出到指定目录并添加后缀${NC}"
+echo -e "${YELLOW}[7/11] 测试场景 6: 文件夹输出到指定目录并添加后缀${NC}"
 $BIN -d "$TEST_DIR/output_prod" -s prod "$TEST_DIR/templates/"
 if [ -f "$TEST_DIR/output_prod/example1.prod.html" ] && \
    [ -f "$TEST_DIR/output_prod/example2.prod.html" ] && \
@@ -175,7 +175,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[8/10] 测试场景 7: 验证压缩效果${NC}"
+echo -e "${YELLOW}[8/11] 测试场景 7: 验证压缩效果${NC}"
 ORIGINAL_SIZE=$(wc -c < "$TEST_DIR/example.html")
 MINIFIED_SIZE=$(wc -c < "$TEST_DIR/example.min.html")
 REDUCTION=$((100 - (MINIFIED_SIZE * 100 / ORIGINAL_SIZE)))
@@ -199,7 +199,7 @@ else
 fi
 echo ""
 
-echo -e "${YELLOW}[9/10] 验证功能完整性${NC}"
+echo -e "${YELLOW}[9/11] 验证功能完整性${NC}"
 
 # 验证 Askama 模板语法保留
 if grep -q "{{ title }}" "$TEST_DIR/example.min.html" && \
@@ -231,7 +231,7 @@ fi
 
 echo ""
 
-echo -e "${YELLOW}[10/10] 测试场景 8: 注释移除和边缘情况${NC}"
+echo -e "${YELLOW}[10/11] 测试场景 8: 注释移除和边缘情况${NC}"
 
 # 验证 HTML 注释移除
 if ! grep -q "<!-- HTML comment" "$TEST_DIR/example.min.html" && \
@@ -285,6 +285,37 @@ if grep -q "{{ heading }}" "$TEST_DIR/example.min.html" && \
     echo -e "${GREEN}✓ 模板语法完整保留（即使原文件有带模板的注释）${NC}"
 else
     echo -e "${RED}✗ 失败: 模板语法被破坏${NC}"
+    exit 1
+fi
+
+echo ""
+
+echo -e "${YELLOW}[11/11] 测试场景 9: 转义字符处理${NC}"
+
+# 创建包含转义字符的测试文件
+cat > "$TEST_DIR/escape_test.html" << 'EOF'
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+const str1 = "test\\";
+const str2 = "test\\"more";
+const str3 = 'quote\\'test';
+console.log("Hello \"World\"");
+</script>
+</body>
+</html>
+EOF
+
+$BIN "$TEST_DIR/escape_test.html"
+
+# 验证转义引号被正确保留
+if grep -q 'const str1="test\\\\";' "$TEST_DIR/escape_test.min.html" && \
+   grep -q 'const str2="test\\\\"more";' "$TEST_DIR/escape_test.min.html"; then
+    echo -e "${GREEN}✓ 转义字符处理正确${NC}"
+else
+    echo -e "${RED}✗ 失败: 转义字符处理不正确${NC}"
+    cat "$TEST_DIR/escape_test.min.html"
     exit 1
 fi
 

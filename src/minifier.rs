@@ -14,10 +14,16 @@ pub fn minify_css(css_code: &str) -> String {
 
             match result {
                 Ok(output) => output.code,
-                Err(_) => css_code.to_string(),
+                Err(e) => {
+                    eprintln!("Warning: Failed to minify CSS: {:?}", e);
+                    css_code.to_string()
+                },
             }
         }
-        Err(_) => css_code.to_string(),
+        Err(e) => {
+            eprintln!("Warning: Failed to parse CSS: {:?}", e);
+            css_code.to_string()
+        },
     }
 }
 
@@ -77,8 +83,18 @@ pub fn minify_js(js_code: &str) -> String {
             if !in_string {
                 in_string = true;
                 string_char = ch;
-            } else if ch == string_char && last_char != '\\' {
-                in_string = false;
+            } else if ch == string_char {
+                // 检查是否被转义：计算前面的反斜杠数量
+                let mut backslash_count = 0;
+                let mut temp_result = result.clone();
+                while temp_result.ends_with('\\') {
+                    backslash_count += 1;
+                    temp_result.pop();
+                }
+                // 偶数个反斜杠（包括0个）意味着引号没有被转义
+                if backslash_count % 2 == 0 {
+                    in_string = false;
+                }
             }
             result.push(ch);
             last_char = ch;
