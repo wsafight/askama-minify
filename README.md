@@ -4,6 +4,8 @@
 
 一个用于压缩 Askama 模板文件的 CLI 工具。支持压缩单个文件或批量处理整个文件夹，提供专业级的 CSS 和 JavaScript 优化。
 
+开发历程可以参考博客 [手写一个 Askama 模板压缩工具](https://github.com/wsafight/personBlog/issues/79)
+
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://github.com/wsafight/askama-minify)
@@ -444,7 +446,7 @@ cargo clippy
 
 - [lightningcss](https://github.com/parcel-bundler/lightningcss) - 出色的 CSS 解析和优化工具
 - [clap](https://github.com/clap-rs/clap) - 强大的命令行参数解析库
-- [Askama](https://github.com/djc/askama) - 灵感来源
+- [Askama](https://github.com/askama-rs/askama) - 灵感来源
 
 ---
 

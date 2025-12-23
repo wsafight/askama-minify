@@ -4,6 +4,8 @@
 
 A CLI tool for minifying Askama template files. Supports minifying single files or batch processing entire folders with professional-grade CSS and JavaScript optimization.
 
+For the development process, please refer to the blog post [手写一个 Askama 模板压缩工具](https://github.com/wsafight/personBlog/issues/79)
+
 [![Rust](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-0.2.1-blue.svg)](https://github.com/wsafight/askama-minify)
@@ -444,7 +446,7 @@ cargo clippy
 
 - [lightningcss](https://github.com/parcel-bundler/lightningcss) - Excellent CSS parsing and optimization tool
 - [clap](https://github.com/clap-rs/clap) - Powerful command-line argument parsing library
-- [Askama](https://github.com/djc/askama) - Source of inspiration
+- [Askama](https://github.com/askama-rs/askama) - Source of inspiration
 
 ---
 
