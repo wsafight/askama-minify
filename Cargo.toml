@@ -1,12 +1,26 @@
 [package]
 name = "askama-minify"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 authors = ["askama-minify contributors"]
-description = "A CLI tool for minifying Askama template files with intelligent comment removal and edge case handling"
+description = "A procedural macro for minifying Askama templates at compile time"
 license = "MIT"
+readme = "README.md"
+repository = "https://github.com/wsafight/askama-minify"
+homepage = "https://github.com/wsafight/askama-minify"
+documentation = "https://docs.rs/askama-minify"
+keywords = ["askama", "template", "minify", "html", "proc-macro"]
+categories = ["development-tools", "template-engine", "web-programming"]
+
+[lib]
+proc-macro = true
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-walkdir = "2.5"
-lightningcss = "1.0.0-alpha.68"
+lightningcss = { version = "1.0.0-alpha.71", default-features = false }
+proc-macro2 = "1.0.106"
+quote = "1.0.45"
+syn = { version = "2.0.117", features = ["full", "parsing", "printing"] }
+
+[dev-dependencies]
+askama = "0.16.0"
+trybuild = "1.0"

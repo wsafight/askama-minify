@@ -1,0 +1,5 @@
+error: template `does-not-exist.html` was not found; tried `$DIR/target/tests/trybuild/askama-minify/does-not-exist.html`, `$DIR/target/tests/trybuild/askama-minify/templates/does-not-exist.html`
+ --> tests/ui/missing_file.rs:4:26
+  |
+4 | #[template_minify(path = "does-not-exist.html")]
+  |                          ^^^^^^^^^^^^^^^^^^^^^

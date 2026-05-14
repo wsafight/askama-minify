@@ -1,0 +1,5 @@
+error: `path` and `source` cannot be used together
+ --> tests/ui/path_and_source.rs:4:26
+  |
+4 | #[template_minify(path = "index.html", source = "<p></p>", ext = "html")]
+  |                          ^^^^^^^^^^^^

@@ -1,0 +1,5 @@
+error: `template_minify` generates `#[template(...)]`; remove the existing template attribute
+ --> tests/ui/existing_template_attr.rs:6:1
+  |
+6 | #[template(source = "<p>{{ value }}</p>", ext = "html")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

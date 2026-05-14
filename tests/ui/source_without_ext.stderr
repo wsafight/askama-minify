@@ -1,0 +1,5 @@
+error: `source` templates require `ext = "..."`
+ --> tests/ui/source_without_ext.rs:4:28
+  |
+4 | #[template_minify(source = "<p>{{ value }}</p>")]
+  |                            ^^^^^^^^^^^^^^^^^^^^

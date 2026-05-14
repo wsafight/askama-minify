@@ -1,0 +1,7 @@
+error: expected `path = "..."` or `source = "..."`
+ --> tests/ui/missing_input.rs:4:1
+  |
+4 | #[template_minify]
+  | ^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `template_minify` (in Nightly builds, run with -Z macro-backtrace for more info)
