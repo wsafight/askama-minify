@@ -2,4 +2,4 @@ error: `template_minify` can only be used on an Askama template item
  --> tests/ui/wrong_item_with_missing_file.rs:4:1
   |
 4 | fn not_a_template_item() {}
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  | ^^

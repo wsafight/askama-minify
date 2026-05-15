@@ -21,7 +21,11 @@ jobs:
         run: cargo fmt --check
 
       - name: Check Lints
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: |
+          cargo clippy --all-targets --no-default-features -- -D warnings
+          cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run Tests
-        run: cargo test
+        run: |
+          cargo test --no-default-features
+          cargo test --all-features
