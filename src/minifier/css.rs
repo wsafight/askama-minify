@@ -1,10 +1,13 @@
 use super::template::try_push_askama_template;
 use super::util::trim_trailing_space;
+use std::borrow::Cow;
 
+#[cfg(feature = "advanced-css")]
+use super::template::contains_askama_template;
 #[cfg(feature = "advanced-css")]
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
 
-pub(super) fn minify_css(css_code: &str) -> String {
+pub(super) fn minify_css(css_code: &str) -> Cow<'_, str> {
     #[cfg(feature = "advanced-css")]
     {
         if !contains_askama_template(css_code) {
@@ -18,7 +21,7 @@ pub(super) fn minify_css(css_code: &str) -> String {
                 });
 
                 if let Ok(output) = result {
-                    return output.code;
+                    return Cow::Owned(output.code);
                 }
             }
         }
@@ -27,7 +30,11 @@ pub(super) fn minify_css(css_code: &str) -> String {
     minify_css_conservative(css_code)
 }
 
-fn minify_css_conservative(css_code: &str) -> String {
+fn minify_css_conservative(css_code: &str) -> Cow<'_, str> {
+    if css_code.contains("--") {
+        return Cow::Borrowed(css_code);
+    }
+
     let mut result = String::with_capacity(css_code.len());
     let mut chars = css_code.chars().peekable();
     let mut in_string = false;
@@ -118,12 +125,7 @@ fn minify_css_conservative(css_code: &str) -> String {
     }
 
     trim_trailing_space(&mut result);
-    result
-}
-
-#[cfg(feature = "advanced-css")]
-fn contains_askama_template(value: &str) -> bool {
-    value.contains("{{") || value.contains("{%") || value.contains("{#")
+    Cow::Owned(result)
 }
 
 fn css_space_is_redundant_after(previous: Option<char>) -> bool {

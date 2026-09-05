@@ -1,3 +1,10 @@
+pub(super) fn contains_askama_template(value: &str) -> bool {
+    value
+        .as_bytes()
+        .windows(2)
+        .any(|pair| pair[0] == b'{' && matches!(pair[1], b'{' | b'%' | b'#'))
+}
+
 pub(super) fn try_push_askama_template(
     ch: char,
     chars: &mut std::iter::Peekable<std::str::Chars<'_>>,

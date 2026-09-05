@@ -5,6 +5,7 @@ use syn::{Expr, ExprLit, Lit, LitStr, Meta, MetaNameValue, Token};
 pub(crate) struct MacroArgs {
     pub(crate) input: TemplateInput,
     pub(crate) ext: Option<LitStr>,
+    pub(crate) config: Option<LitStr>,
     pub(crate) passthrough: Vec<Meta>,
 }
 
@@ -19,6 +20,7 @@ impl MacroArgs {
         let mut path = None;
         let mut source = None;
         let mut ext = None;
+        let mut config = None;
         let mut passthrough = Vec::new();
 
         for meta in metas {
@@ -34,6 +36,12 @@ impl MacroArgs {
 
             if let Some(value) = string_name_value(&meta, "ext")? {
                 set_once(&mut ext, value, "duplicate `ext` argument")?;
+                continue;
+            }
+
+            if let Some(value) = string_name_value(&meta, "config")? {
+                set_once(&mut config, value, "duplicate `config` argument")?;
+                passthrough.push(meta);
                 continue;
             }
 
@@ -60,6 +68,7 @@ impl MacroArgs {
         Ok(Self {
             input,
             ext,
+            config,
             passthrough,
         })
     }

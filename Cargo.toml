@@ -1,7 +1,8 @@
 [package]
 name = "askama-minify"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
+rust-version = "1.85"
 authors = ["askama-minify contributors"]
 description = "A procedural macro for minifying Askama templates at compile time"
 license = "MIT"
@@ -16,13 +17,19 @@ categories = ["development-tools", "template-engine", "web-programming"]
 proc-macro = true
 
 [features]
-default = []
+default = ["askama-config", "js-minify"]
+askama-config = ["dep:basic-toml", "dep:glob", "dep:serde"]
 advanced-css = ["dep:lightningcss"]
+js-minify = ["dep:minify-js"]
 
 [dependencies]
+basic-toml = { version = "0.1.10", optional = true }
+glob = { version = "0.3.3", optional = true }
 lightningcss = { version = "1.0.0-alpha.71", default-features = false, optional = true }
+minify-js = { version = "0.6.0", optional = true }
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
+serde = { version = "1.0", features = ["derive"], optional = true }
 syn = { version = "2.0.117", default-features = false, features = ["clone-impls", "derive", "parsing", "printing", "proc-macro"] }
 
 [dev-dependencies]

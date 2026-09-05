@@ -23,8 +23,9 @@ struct IndexTemplate<'a> {
 
 路径解析规则：
 
-- 先尝试 `CARGO_MANIFEST_DIR/<path>`
-- 再尝试 `CARGO_MANIFEST_DIR/templates/<path>`
+- 优先使用 Askama `[general].dirs` 配置的目录
+- 未配置自定义目录时使用 `CARGO_MANIFEST_DIR/templates/<path>`
+- 最后以 `CARGO_MANIFEST_DIR/<path>` 作为兼容回退
 
 所以常见的 Askama 目录结构可以直接写：
 
@@ -74,14 +75,31 @@ struct PageTemplate;
 ## 说明
 
 - 模板文件会通过 `include_str!` 注入到展开结果里，模板内容变更后 Cargo 能重新编译。
-- `html` 和 `htm` 模板会压缩 HTML；其中的 CSS 和 JavaScript 默认使用保守的内置实现。
-- 如需使用 `lightningcss` 做更完整的 CSS 压缩，可开启 `advanced-css` feature：
+- Askama 配置文件也会被跟踪。文件模板中的相对 `include`、`extends` 和 `import` 会继续从原模板目录解析。
+- `html` 和 `htm` 模板会压缩 HTML。没有 Askama 语法的 JavaScript 会在解析成功后压缩；包含 Askama 语法或暂不支持语法的脚本会原样保留。
+- 内置 CSS 压缩器遇到自定义属性语法时会原样保留样式表，因为自定义属性值中的 token 空白可能影响语义。
+
+## Features
+
+默认 features 保持完整功能：
+
+- `askama-config`：使用轻量的 `basic-toml` 读取 `askama.toml` 中的 `[general].dirs`；配置解析和 glob 结果会在同一编译器进程内缓存。
+- `js-minify`：启用基于解析器的 JavaScript 压缩。关闭后内联 JavaScript 原样保留，同时无需编译 JavaScript 解析器。
+- `advanced-css`：使用 `lightningcss` 做更完整的 CSS 压缩。由于它会显著扩大编译依赖图，因此默认不启用。
+
+如需最小依赖图，可以关闭默认 features。此时模板路径使用默认的 `templates/` 目录（并保留项目根目录兼容回退），内联 JavaScript 原样保留：
+
+```toml
+askama-minify = { version = "0.3", default-features = false }
+```
+
+启用高级 CSS 压缩：
 
 ```toml
 askama-minify = { version = "0.3", features = ["advanced-css"] }
 ```
 
-- 开启 `advanced-css` 时，包含 Askama 语法的 CSS 仍会回退到内置压缩器，避免无效 CSS 解析拖慢编译。
+- 包含 Askama 语法的 CSS 仍会回退到内置压缩器，避免无效 CSS 解析拖慢编译。
 - 非 HTML 扩展会保留原模板内容，只注入为 Askama 的 `source`。
 
 ## 架构
@@ -91,12 +109,12 @@ askama-minify = { version = "0.3", features = ["advanced-css"] }
 - `src/lib.rs`：过程宏入口。解析属性参数和目标 item，然后交给展开模块。
 - `src/args.rs`：解析 `path`、`source`、`ext`，并收集需要转发给 Askama 的额外参数。
 - `src/item.rs`：解析可 derive 的目标 item，并拒绝已有的 `#[template(...)]` 属性。
-- `src/loader.rs`：解析模板路径、读取模板文件、推断扩展名，并决定是否压缩。
+- `src/loader.rs`：读取 Askama 配置、解析模板及依赖路径、读取模板文件、推断扩展名，并决定是否压缩。
 - `src/expand.rs`：生成 `#[template(source = "...", ext = "...")]` 属性，并为文件模板追加 `include_str!` 跟踪。
 - `src/minifier.rs`：内部 HTML 压缩入口。
 - `src/minifier/html.rs`：HTML 扫描器，保留 Askama 语法，并分发内联 `<style>` 和 `<script>` 内容。
 - `src/minifier/css.rs`：CSS 压缩。默认使用保守内置压缩器，开启 `advanced-css` 后使用 `lightningcss`。
-- `src/minifier/js.rs`：保守的 JavaScript 空白/注释压缩，保留字符串内容和必要换行。
+- `src/minifier/js.rs`：基于解析器压缩 JavaScript；遇到 Askama 语法或暂不支持的 JavaScript 时无损回退。
 - `src/minifier/template.rs`：共享的 Askama 片段复制逻辑，处理 `{{ ... }}`、`{% ... %}` 和 `{# ... #}`。
 - `src/minifier/util.rs`：共享字符串裁剪工具。
 
@@ -111,3 +129,7 @@ template_minify 属性
   -> 注入 Askama #[template(source = "...", ext = "...")]
   -> 为 path 模板输出 include_str! 跟踪
 ```
+
+## 编译性能基准
+
+运行 `scripts/benchmark-compile.sh` 可测量最小、默认和 all-features 三种依赖图的冷 `cargo check` 时间与峰值内存。每次测量都使用独立的临时 target 目录，并排除依赖下载时间。

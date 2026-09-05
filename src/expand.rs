@@ -13,7 +13,7 @@ pub(crate) fn expand_template_minify(
 
     let template = load_template(&args)?;
     let source = LitStr::new(
-        &minify_template_source(&template.source, &template.ext),
+        &minify_template_source(template.source, &template.ext),
         Span::call_site(),
     );
     let ext = LitStr::new(&template.ext, Span::call_site());
@@ -24,7 +24,7 @@ pub(crate) fn expand_template_minify(
     };
     item.attrs.push(template_attr);
 
-    let tracking = template.include_path.map(|path| {
+    let tracking = template.include_paths.iter().map(|path| {
         let path = LitStr::new(&path.to_string_lossy(), Span::call_site());
         quote! {
             const _: &str = include_str!(#path);
@@ -33,6 +33,6 @@ pub(crate) fn expand_template_minify(
 
     Ok(quote! {
         #item
-        #tracking
+        #(#tracking)*
     })
 }

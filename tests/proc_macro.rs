@@ -56,6 +56,19 @@ struct TextTemplate<'a> {
 #[derive(Template)]
 struct AssetTemplate;
 
+#[template_minify(path = "nested/page.html")]
+#[derive(Template)]
+struct RelativeIncludeTemplate<'a> {
+    value: &'a str,
+}
+
+#[cfg(feature = "askama-config")]
+#[template_minify(path = "custom.html", config = "tests/askama-custom.toml")]
+#[derive(Template)]
+struct CustomTemplateDirectory<'a> {
+    value: &'a str,
+}
+
 #[test]
 fn renders_minified_inline_source() {
     let rendered = SourceTemplate { value: "ok" }.render().unwrap();
@@ -103,6 +116,26 @@ fn minifies_embedded_css_and_javascript() {
     let rendered = AssetTemplate.render().unwrap();
 
     assert!(rendered.contains("<style>.box{color:red;margin:0}</style>"));
-    assert!(rendered.contains("<script>const value=1;</script>"));
-    assert!(!rendered.contains("removed"));
+    if cfg!(feature = "js-minify") {
+        assert!(rendered.contains("<script>const value=1</script>"));
+        assert!(!rendered.contains("removed"));
+    } else {
+        assert!(rendered.contains("// removed"));
+        assert!(rendered.contains("const value = 1;"));
+    }
+}
+
+#[test]
+fn preserves_relative_include_resolution() {
+    let rendered = RelativeIncludeTemplate { value: "ok" }.render().unwrap();
+
+    assert_eq!(rendered, "<main><p>ok</p></main>");
+}
+
+#[cfg(feature = "askama-config")]
+#[test]
+fn resolves_paths_from_askama_config() {
+    let rendered = CustomTemplateDirectory { value: "ok" }.render().unwrap();
+
+    assert_eq!(rendered, "<article> ok </article>");
 }
