@@ -1,7 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-    <body>
-        <!-- removed -->
-        {% block content %}{% endblock %}
-    </body>
-</html>
+{% extends "layout.html" %}
+{% import "macros.html" as components %}
+{% block body %}
+    <!-- removed from base -->
+    {{ components::navigation() }}
+    {% include "partial.html" %}
+    {% block content %}{% endblock %}
+{% endblock %}

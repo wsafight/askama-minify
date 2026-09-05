@@ -1,6 +1,6 @@
 use crate::args::MacroArgs;
 use crate::item::reject_existing_template_attr;
-use crate::loader::{load_template, minify_template_source};
+use crate::loader::load_template;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{Attribute, DeriveInput, LitStr, parse_quote};
@@ -12,10 +12,7 @@ pub(crate) fn expand_template_minify(
     reject_existing_template_attr(&item)?;
 
     let template = load_template(&args)?;
-    let source = LitStr::new(
-        &minify_template_source(template.source, &template.ext),
-        Span::call_site(),
-    );
+    let source = LitStr::new(&template.source, Span::call_site());
     let ext = LitStr::new(&template.ext, Span::call_site());
     let passthrough = args.passthrough;
 

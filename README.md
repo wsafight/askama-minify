@@ -74,8 +74,8 @@ This expands to a minified source template:
 
 ## Notes
 
-- Template files are tracked through `include_str!`, so Cargo rebuilds when the source template changes.
-- Askama config files are tracked too. Relative `include`, `extends`, and `import` paths in file templates keep resolving from the original template directory.
+- Template files and their `include`, `extends`, and `import` dependencies are tracked through `include_str!`, so Cargo rebuilds when any source template changes.
+- Askama config files are tracked too. Template dependencies are resolved relative to the source template, recursively minified, and passed to Askama through isolated generated files.
 - `html` and `htm` templates are minified as HTML. JavaScript without Askama syntax is parsed before it is minified; scripts containing Askama syntax or unsupported JavaScript are preserved unchanged.
 - The built-in CSS minifier preserves stylesheets containing custom-property syntax unchanged because custom-property token whitespace can be significant.
 
@@ -109,8 +109,8 @@ askama-minify = { version = "0.3", features = ["advanced-css"] }
 - `src/lib.rs`: proc-macro entry point. It parses the attribute and target item, then delegates expansion.
 - `src/args.rs`: parses `path`, `source`, `ext`, and collects extra Askama arguments for forwarding.
 - `src/item.rs`: parses the target derive item and rejects an existing `#[template(...)]` attribute.
-- `src/loader.rs`: reads Askama config, resolves template and dependency paths, reads template files, infers extensions, and chooses whether to minify.
-- `src/expand.rs`: builds the generated `#[template(source = "...", ext = "...")]` attribute and adds `include_str!` tracking for file templates.
+- `src/loader.rs`: reads Askama config, recursively resolves and minifies template dependencies, and writes isolated generated templates for Askama.
+- `src/expand.rs`: builds the generated `#[template(source = "...", ext = "...")]` attribute and adds `include_str!` tracking for template files.
 - `src/minifier.rs`: public internal entry for HTML minification.
 - `src/minifier/html.rs`: HTML scanner that preserves Askama syntax and delegates inline `<style>` and `<script>` content.
 - `src/minifier/css.rs`: CSS minification. It uses the built-in conservative minifier by default and `lightningcss` when `advanced-css` is enabled.
@@ -125,9 +125,9 @@ template_minify attribute
   -> parse MacroArgs
   -> parse TemplateItem
   -> load or read source template
-  -> minify HTML templates
+  -> recursively resolve and minify template dependencies
   -> inject Askama #[template(source = "...", ext = "...")]
-  -> emit include_str! tracking for path-based templates
+  -> emit include_str! tracking for source template files
 ```
 
 ## Compile-time Benchmark

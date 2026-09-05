@@ -74,8 +74,8 @@ struct PageTemplate;
 
 ## 说明
 
-- 模板文件会通过 `include_str!` 注入到展开结果里，模板内容变更后 Cargo 能重新编译。
-- Askama 配置文件也会被跟踪。文件模板中的相对 `include`、`extends` 和 `import` 会继续从原模板目录解析。
+- 模板文件及其 `include`、`extends`、`import` 依赖会通过 `include_str!` 注入到展开结果里，任一源模板变更后 Cargo 都能重新编译。
+- Askama 配置文件也会被跟踪。模板依赖会相对源模板递归解析和压缩，再通过隔离的生成文件交给 Askama。
 - `html` 和 `htm` 模板会压缩 HTML。没有 Askama 语法的 JavaScript 会在解析成功后压缩；包含 Askama 语法或暂不支持语法的脚本会原样保留。
 - 内置 CSS 压缩器遇到自定义属性语法时会原样保留样式表，因为自定义属性值中的 token 空白可能影响语义。
 
@@ -109,8 +109,8 @@ askama-minify = { version = "0.3", features = ["advanced-css"] }
 - `src/lib.rs`：过程宏入口。解析属性参数和目标 item，然后交给展开模块。
 - `src/args.rs`：解析 `path`、`source`、`ext`，并收集需要转发给 Askama 的额外参数。
 - `src/item.rs`：解析可 derive 的目标 item，并拒绝已有的 `#[template(...)]` 属性。
-- `src/loader.rs`：读取 Askama 配置、解析模板及依赖路径、读取模板文件、推断扩展名，并决定是否压缩。
-- `src/expand.rs`：生成 `#[template(source = "...", ext = "...")]` 属性，并为文件模板追加 `include_str!` 跟踪。
+- `src/loader.rs`：读取 Askama 配置，递归解析并压缩模板依赖，然后为 Askama 写入隔离的生成模板。
+- `src/expand.rs`：生成 `#[template(source = "...", ext = "...")]` 属性，并为模板文件追加 `include_str!` 跟踪。
 - `src/minifier.rs`：内部 HTML 压缩入口。
 - `src/minifier/html.rs`：HTML 扫描器，保留 Askama 语法，并分发内联 `<style>` 和 `<script>` 内容。
 - `src/minifier/css.rs`：CSS 压缩。默认使用保守内置压缩器，开启 `advanced-css` 后使用 `lightningcss`。
@@ -125,9 +125,9 @@ template_minify 属性
   -> 解析 MacroArgs
   -> 解析 TemplateItem
   -> 加载或读取模板源码
-  -> 压缩 HTML 模板
+  -> 递归解析并压缩模板依赖
   -> 注入 Askama #[template(source = "...", ext = "...")]
-  -> 为 path 模板输出 include_str! 跟踪
+  -> 为源模板文件输出 include_str! 跟踪
 ```
 
 ## 编译性能基准
