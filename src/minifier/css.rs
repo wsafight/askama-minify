@@ -1,9 +1,11 @@
 use super::template::try_push_askama_template;
-use super::util::trim_trailing_space;
+use super::util::{is_html_whitespace as is_css_whitespace, trim_trailing_space};
 use std::borrow::Cow;
 
 #[cfg(feature = "advanced-css")]
 use super::template::contains_askama_template;
+#[cfg(feature = "advanced-css")]
+use super::util::contains_end_tag;
 #[cfg(feature = "advanced-css")]
 use lightningcss::stylesheet::{MinifyOptions, ParserOptions, PrinterOptions, StyleSheet};
 
@@ -14,13 +16,18 @@ pub(super) fn minify_css(css_code: &str) -> Cow<'_, str> {
             let stylesheet = StyleSheet::parse(css_code, ParserOptions::default());
 
             if let Ok(mut sheet) = stylesheet {
-                sheet.minify(MinifyOptions::default()).ok();
+                if sheet.minify(MinifyOptions::default()).is_err() {
+                    return Cow::Borrowed(css_code);
+                }
                 let result = sheet.to_css(PrinterOptions {
                     minify: true,
                     ..PrinterOptions::default()
                 });
 
                 if let Ok(output) = result {
+                    if contains_end_tag(&output.code, "style") {
+                        return Cow::Borrowed(css_code);
+                    }
                     return Cow::Owned(output.code);
                 }
             }
@@ -36,7 +43,7 @@ fn minify_css_conservative(css_code: &str) -> Cow<'_, str> {
     }
 
     let mut result = String::with_capacity(css_code.len());
-    let mut chars = css_code.chars().peekable();
+    let mut chars = css_code.chars();
     let mut in_string = false;
     let mut string_char = '\0';
     let mut escaped = false;
@@ -61,7 +68,7 @@ fn minify_css_conservative(css_code: &str) -> Cow<'_, str> {
                 in_string = false;
             }
 
-            if !ch.is_whitespace() {
+            if !is_css_whitespace(ch) {
                 last_significant_char = Some(ch);
             }
             last_was_space = false;
@@ -77,27 +84,31 @@ fn minify_css_conservative(css_code: &str) -> Cow<'_, str> {
             continue;
         }
 
-        if ch == '/' && chars.peek() == Some(&'*') {
+        if ch == '/' && chars.clone().next() == Some('*') {
             chars.next();
 
             while let Some(comment_ch) = chars.next() {
-                if comment_ch == '*' && chars.peek() == Some(&'/') {
+                if comment_ch == '*' && chars.clone().next() == Some('/') {
                     chars.next();
                     break;
                 }
             }
 
-            if !css_space_is_redundant_after(last_significant_char)
+            // An empty comment separates tokens without adding a descendant combinator.
+            if !result.is_empty()
                 && !last_was_space
-                && !result.is_empty()
+                && !css_space_is_redundant_after(last_significant_char)
+                && chars
+                    .clone()
+                    .next()
+                    .is_some_and(|ch| !is_css_whitespace(ch))
             {
-                result.push(' ');
-                last_was_space = true;
+                result.push_str("/**/");
             }
             continue;
         }
 
-        if ch.is_whitespace() {
+        if is_css_whitespace(ch) {
             if !css_space_is_redundant_after(last_significant_char)
                 && !last_was_space
                 && !result.is_empty()

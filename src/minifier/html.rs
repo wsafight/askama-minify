@@ -1,11 +1,31 @@
 use super::css::minify_css;
 use super::js::{ScriptMode, minify_js};
-use super::template::{contains_askama_template, try_push_askama_template};
-use super::util::trim_trailing_whitespace;
+use super::template::{block_keyword, contains_askama_template, try_push_askama_template};
+use super::util::{is_html_whitespace, trim_trailing_whitespace};
 
 pub(crate) fn minify_html(content: &str) -> String {
+    process_html(content, HtmlMode::Document).0
+}
+
+pub(crate) fn minify_html_fragment(content: &str) -> String {
+    process_html(content, HtmlMode::Fragment).0
+}
+
+pub(crate) fn has_sensitive_template_context(content: &str) -> bool {
+    process_html(content, HtmlMode::Inspect).1
+}
+
+enum HtmlMode {
+    Document,
+    Fragment,
+    Inspect,
+}
+
+fn process_html(content: &str, mode: HtmlMode) -> (String, bool) {
+    let preserve_edges = !matches!(mode, HtmlMode::Document);
+    let inspect = matches!(mode, HtmlMode::Inspect);
     let mut result = String::with_capacity(content.len());
-    let mut chars = content.chars().peekable();
+    let mut chars = content.chars();
     let mut in_tag = false;
     let mut in_script = false;
     let mut in_style = false;
@@ -43,7 +63,11 @@ pub(crate) fn minify_html(content: &str) -> String {
                     &mut style_content
                 };
 
+                let template_start = target.len();
                 if try_push_askama_template(ch, &mut chars, target).is_some() {
+                    if inspect && may_insert_fragment(&target[template_start..]) {
+                        return (String::new(), true);
+                    }
                     last_was_space = false;
                     continue;
                 }
@@ -60,12 +84,25 @@ pub(crate) fn minify_html(content: &str) -> String {
             continue;
         }
 
+        let template_start = result.len();
         if try_push_askama_template(ch, &mut chars, &mut result).is_some() {
+            let template = &result[template_start..];
+            // Raw markup can change the surrounding HTML state across the block boundary.
+            if block_keyword(template) == "raw" && (in_tag || template.contains('<')) {
+                return if inspect {
+                    (String::new(), true)
+                } else {
+                    (content.to_owned(), false)
+                };
+            }
+            if inspect && (in_tag || in_pre || in_textarea) && may_insert_fragment(template) {
+                return (String::new(), true);
+            }
             last_was_space = false;
             continue;
         }
 
-        if !in_script && !in_style && ch == '<' && starts_with_html_comment(&chars) {
+        if !in_tag && !in_script && !in_style && ch == '<' && starts_with_html_comment(&chars) {
             chars.next();
             chars.next();
             chars.next();
@@ -110,7 +147,7 @@ pub(crate) fn minify_html(content: &str) -> String {
                 continue;
             }
 
-            if ch.is_whitespace() {
+            if is_html_whitespace(ch) {
                 if !last_was_space {
                     result.push(' ');
                     last_was_space = true;
@@ -130,8 +167,8 @@ pub(crate) fn minify_html(content: &str) -> String {
             result.push(ch);
             last_was_space = false;
 
-            while let Some(&next_ch) = chars.peek() {
-                if next_ch.is_whitespace() || next_ch == '>' {
+            while let Some(next_ch) = chars.clone().next() {
+                if is_html_whitespace(next_ch) || next_ch == '>' {
                     break;
                 }
                 if next_ch == '/' && !tag_name.is_empty() {
@@ -141,9 +178,12 @@ pub(crate) fn minify_html(content: &str) -> String {
             }
 
             if tag_name.eq_ignore_ascii_case("/script") {
+                if inspect && !in_script {
+                    return (String::new(), true);
+                }
                 result.pop();
                 if !script_content.is_empty() {
-                    if let Some(mode) = script_mode {
+                    if let Some(mode) = script_mode.filter(|_| !inspect) {
                         result.push_str(&minify_js(&script_content, mode));
                     } else {
                         result.push_str(&script_content);
@@ -153,9 +193,12 @@ pub(crate) fn minify_html(content: &str) -> String {
                 in_script = false;
                 result.push('<');
             } else if tag_name.eq_ignore_ascii_case("/style") {
+                if inspect && !in_style {
+                    return (String::new(), true);
+                }
                 result.pop();
                 if !style_content.is_empty() {
-                    if should_minify_style {
+                    if should_minify_style && !inspect {
                         result.push_str(&minify_css(&style_content));
                     } else {
                         result.push_str(&style_content);
@@ -165,8 +208,14 @@ pub(crate) fn minify_html(content: &str) -> String {
                 in_style = false;
                 result.push('<');
             } else if tag_name.eq_ignore_ascii_case("/pre") {
+                if inspect && !in_pre {
+                    return (String::new(), true);
+                }
                 in_pre = false;
             } else if tag_name.eq_ignore_ascii_case("/textarea") {
+                if inspect && !in_textarea {
+                    return (String::new(), true);
+                }
                 in_textarea = false;
             }
 
@@ -193,8 +242,8 @@ pub(crate) fn minify_html(content: &str) -> String {
         if in_pre || in_textarea {
             result.push(ch);
             last_was_space = false;
-        } else if ch.is_whitespace() {
-            if !last_was_space && !result.is_empty() {
+        } else if is_html_whitespace(ch) {
+            if !last_was_space && (preserve_edges || !result.is_empty()) {
                 result.push(' ');
                 last_was_space = true;
             }
@@ -202,6 +251,13 @@ pub(crate) fn minify_html(content: &str) -> String {
             result.push(ch);
             last_was_space = false;
         }
+    }
+
+    if inspect {
+        return (
+            String::new(),
+            in_tag || in_pre || in_textarea || in_script || in_style,
+        );
     }
 
     if in_script {
@@ -218,8 +274,15 @@ pub(crate) fn minify_html(content: &str) -> String {
         }
     }
 
-    trim_trailing_whitespace(&mut result);
-    result
+    if !preserve_edges && !in_pre && !in_textarea && !in_script && !in_style && !in_tag {
+        trim_trailing_whitespace(&mut result);
+    }
+    (result, false)
+}
+
+fn may_insert_fragment(template: &str) -> bool {
+    matches!(block_keyword(template), "include" | "block" | "call")
+        || (template.starts_with("{{") && template.contains('('))
 }
 
 fn script_tag_minification_mode(tag: &str) -> Option<ScriptMode> {
@@ -229,7 +292,7 @@ fn script_tag_minification_mode(tag: &str) -> Option<ScriptMode> {
     let Some(script_type) = attribute_value(tag, "type") else {
         return Some(ScriptMode::Global);
     };
-    let script_type = script_type.trim();
+    let script_type = script_type.trim_matches(is_html_whitespace);
 
     if script_type.eq_ignore_ascii_case("module") {
         Some(ScriptMode::Module)
@@ -257,7 +320,7 @@ fn style_tag_should_be_minified(tag: &str) -> bool {
         return false;
     }
     attribute_value(tag, "type").is_none_or(|value| {
-        let value = value.trim();
+        let value = value.trim_matches(is_html_whitespace);
         value.is_empty() || value.eq_ignore_ascii_case("text/css")
     })
 }
@@ -267,14 +330,14 @@ fn attribute_value<'a>(tag: &'a str, target: &str) -> Option<&'a str> {
     let mut cursor = 1;
 
     while cursor < bytes.len()
-        && !bytes[cursor].is_ascii_whitespace()
+        && !is_html_whitespace(bytes[cursor] as char)
         && !matches!(bytes[cursor], b'/' | b'>')
     {
         cursor += 1;
     }
 
     while cursor < bytes.len() {
-        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        while cursor < bytes.len() && is_html_whitespace(bytes[cursor] as char) {
             cursor += 1;
         }
         if cursor >= bytes.len() || matches!(bytes[cursor], b'/' | b'>') {
@@ -283,19 +346,19 @@ fn attribute_value<'a>(tag: &'a str, target: &str) -> Option<&'a str> {
 
         let name_start = cursor;
         while cursor < bytes.len()
-            && !bytes[cursor].is_ascii_whitespace()
+            && !is_html_whitespace(bytes[cursor] as char)
             && !matches!(bytes[cursor], b'=' | b'/' | b'>')
         {
             cursor += 1;
         }
         let name = &tag[name_start..cursor];
-        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+        while cursor < bytes.len() && is_html_whitespace(bytes[cursor] as char) {
             cursor += 1;
         }
 
         let (value_start, value_end) = if cursor < bytes.len() && bytes[cursor] == b'=' {
             cursor += 1;
-            while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            while cursor < bytes.len() && is_html_whitespace(bytes[cursor] as char) {
                 cursor += 1;
             }
             if cursor < bytes.len() && matches!(bytes[cursor], b'"' | b'\'') {
@@ -311,8 +374,8 @@ fn attribute_value<'a>(tag: &'a str, target: &str) -> Option<&'a str> {
             } else {
                 let start = cursor;
                 while cursor < bytes.len()
-                    && !bytes[cursor].is_ascii_whitespace()
-                    && !matches!(bytes[cursor], b'/' | b'>')
+                    && !is_html_whitespace(bytes[cursor] as char)
+                    && bytes[cursor] != b'>'
                 {
                     cursor += 1;
                 }
@@ -329,16 +392,11 @@ fn attribute_value<'a>(tag: &'a str, target: &str) -> Option<&'a str> {
     None
 }
 
-fn starts_with_html_comment(chars: &std::iter::Peekable<std::str::Chars<'_>>) -> bool {
-    let mut lookahead = chars.clone();
-
-    matches!(
-        (lookahead.next(), lookahead.next(), lookahead.next()),
-        (Some('!'), Some('-'), Some('-'))
-    )
+fn starts_with_html_comment(chars: &std::str::Chars<'_>) -> bool {
+    chars.as_str().starts_with("!--")
 }
 
-fn starts_with_closing_tag(chars: &std::iter::Peekable<std::str::Chars<'_>>, tag: &str) -> bool {
+fn starts_with_closing_tag(chars: &std::str::Chars<'_>, tag: &str) -> bool {
     let mut lookahead = chars.clone();
 
     if lookahead.next() != Some('/') {
@@ -355,5 +413,5 @@ fn starts_with_closing_tag(chars: &std::iter::Peekable<std::str::Chars<'_>>, tag
         }
     }
 
-    matches!(lookahead.peek(), Some(ch) if ch.is_whitespace() || *ch == '>')
+    matches!(lookahead.next(), Some(ch) if is_html_whitespace(ch) || matches!(ch, '/' | '>'))
 }

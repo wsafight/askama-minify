@@ -1,7 +1,7 @@
 mod css;
 mod html;
 mod js;
-mod template;
+pub(crate) mod template;
 mod util;
 
-pub(crate) use html::minify_html;
+pub(crate) use html::{has_sensitive_template_context, minify_html, minify_html_fragment};

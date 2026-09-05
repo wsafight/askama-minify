@@ -16,7 +16,9 @@ jobs:
         uses: dtolnay/rust-toolchain@1.85.0
 
       - name: Check MSRV
-        run: cargo check --all-features
+        run: |
+          cargo check --locked --no-default-features
+          cargo check --locked --all-features
 
   test:
     runs-on: ubuntu-latest

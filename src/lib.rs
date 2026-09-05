@@ -27,8 +27,8 @@ use item::TemplateItem;
 /// }
 /// ```
 ///
-/// Template paths are resolved relative to `CARGO_MANIFEST_DIR`; if that file
-/// does not exist, `templates/<path>` is tried to match Askama's default layout.
+/// Template paths are resolved from Askama's configured directories, or
+/// `templates/` by default, with `CARGO_MANIFEST_DIR` as a compatibility fallback.
 #[proc_macro_attribute]
 pub fn template_minify(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr with MacroArgs::parse);

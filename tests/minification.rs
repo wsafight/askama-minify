@@ -384,3 +384,174 @@ fn does_not_create_script_end_tags_during_minification() {
     assert_eq!(rendered.to_ascii_lowercase().matches("</script").count(), 1);
     assert!(rendered.contains("<\\/script>"));
 }
+
+#[test]
+fn does_not_create_style_end_tags_during_minification() {
+    #[template_minify(
+        source = r#"<style>.x::before { content: "\3c /StYlE>"; }</style>"#,
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct EscapedStyleEnd;
+
+    let rendered = EscapedStyleEnd.render().unwrap();
+    assert_eq!(rendered.to_ascii_lowercase().matches("</style").count(), 1);
+    assert!(rendered.contains(r#""\3c /StYlE>""#));
+}
+
+#[test]
+fn preserves_regex_after_less_than_operator() {
+    #[template_minify(
+        source = "<script>const ok = a < /script/.test(b);</script>",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct RegexBoundary;
+
+    assert_eq!(
+        RegexBoundary.render().unwrap(),
+        "<script>const ok = a < /script/.test(b);</script>"
+    );
+}
+
+#[test]
+fn preserves_css_comment_token_boundaries() {
+    #[template_minify(
+        source = "<style>.a/**/.b { color: {{ color }}; } .c /**/.d { color: red; }</style>",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct CommentSelectors<'a> {
+        color: &'a str,
+    }
+
+    assert_eq!(
+        CommentSelectors { color: "red" }.render().unwrap(),
+        "<style>.a/**/.b{color:red} .c .d{color:red}</style>"
+    );
+}
+
+#[test]
+fn preserves_markers_inside_template_strings() {
+    #[template_minify(
+        source = r#"<p>{{ "}} a   b" }}</p>{% let value = "%} c   d" %}<p>{{ value }}</p>"#,
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct StringMarkers;
+
+    assert_eq!(
+        StringMarkers.render().unwrap(),
+        "<p>}} a   b</p><p>%} c   d</p>"
+    );
+}
+
+#[test]
+fn preserves_nested_template_comments() {
+    #[template_minify(source = "<p>{# outer {# nested #} <!-- #}ok</p>", ext = "html")]
+    #[derive(Template)]
+    struct NestedComments;
+
+    assert_eq!(NestedComments.render().unwrap(), "<p>ok</p>");
+}
+
+#[test]
+fn preserves_raw_blocks() {
+    #[template_minify(
+        source = "{% raw %}<p>  literal   text <!-- keep --> {{ value }}</p>{% endraw %}",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct RawBlock;
+
+    assert_eq!(
+        RawBlock.render().unwrap(),
+        "<p>  literal   text <!-- keep --> {{ value }}</p>"
+    );
+}
+
+#[test]
+fn preserves_html_context_across_raw_block_boundaries() {
+    #[template_minify(
+        source = "{% raw %}<pre>{% endraw %}  first   line\n  next  </pre>",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct RawPreStart;
+
+    assert_eq!(
+        RawPreStart.render().unwrap(),
+        "<pre>  first   line\n  next  </pre>"
+    );
+}
+
+#[test]
+fn preserves_comment_markers_in_attributes() {
+    #[template_minify(
+        source = r#"<div title="a<!--keep-->b" data-value='c<!--keep-->d'>ok</div>"#,
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct AttributeComments;
+
+    assert_eq!(
+        AttributeComments.render().unwrap(),
+        r#"<div title="a<!--keep-->b" data-value='c<!--keep-->d'>ok</div>"#
+    );
+}
+
+#[test]
+fn preserves_unicode_whitespace() {
+    #[template_minify(source = "\u{00a0}<p>A\u{00a0}B\u{3000}C</p>\u{3000}", ext = "html")]
+    #[derive(Template)]
+    struct UnicodeWhitespace;
+
+    assert_eq!(
+        UnicodeWhitespace.render().unwrap(),
+        "\u{00a0}<p>A\u{00a0}B\u{3000}C</p>\u{3000}"
+    );
+}
+
+#[test]
+fn recognizes_unquoted_script_mime_types() {
+    #[template_minify(
+        source = "<script type=text/javascript>const value = 1;</script>",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct UnquotedType;
+
+    let expected = if cfg!(feature = "js-minify") {
+        "<script type=text/javascript>const value=1</script>"
+    } else {
+        "<script type=text/javascript>const value = 1;</script>"
+    };
+    assert_eq!(UnquotedType.render().unwrap(), expected);
+}
+
+#[test]
+fn recognizes_raw_text_end_tags_with_a_slash() {
+    #[template_minify(
+        source = "<textarea>before</textarea/><p>   after   </p>",
+        ext = "html"
+    )]
+    #[derive(Template)]
+    struct SlashEnd;
+
+    assert_eq!(
+        SlashEnd.render().unwrap(),
+        "<textarea>before</textarea/><p> after </p>"
+    );
+}
+
+#[test]
+fn preserves_whitespace_in_unclosed_textarea() {
+    #[template_minify(source = "<textarea>  value  \n  ", ext = "html")]
+    #[derive(Template)]
+    struct UnclosedTextarea;
+
+    assert_eq!(
+        UnclosedTextarea.render().unwrap(),
+        "<textarea>  value  \n  "
+    );
+}

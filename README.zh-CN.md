@@ -76,8 +76,12 @@ struct PageTemplate;
 
 - 模板文件及其 `include`、`extends`、`import` 依赖会通过 `include_str!` 注入到展开结果里，任一源模板变更后 Cargo 都能重新编译。
 - Askama 配置文件也会被跟踪。模板依赖会相对源模板递归解析和压缩，再通过隔离的生成文件交给 Askama。
+- 被引入的 HTML 片段会保留边界空白。如果依赖图在 `pre`、`textarea`、`script`、`style` 或属性值等敏感上下文中插入片段，或包含无法确定上下文的不完整标签，会保守保留这组模板。这也适用于这些位置的继承块和导入宏。
 - `html` 和 `htm` 模板会压缩 HTML。没有 Askama 语法的 JavaScript 会在解析成功后压缩；包含 Askama 语法或暂不支持语法的脚本会原样保留。
+- JavaScript 和高级 CSS 的压缩结果如果可能引入 HTML 结束标签，会回退到原文。Askama 字符串、嵌套注释、raw 块、带引号的 HTML 属性及非 ASCII 空白均会保留。
 - 内置 CSS 压缩器遇到自定义属性语法时会原样保留样式表，因为自定义属性值中的 token 空白可能影响语义。
+- 必要的 CSS 注释边界会以空注释保留，避免变成改变选择器含义的空格。
+- 模板文件内容和压缩结果会在同一编译器进程内缓存。文件元数据变化会使文件缓存失效；原始依赖仍会全部跟踪，相同的生成文件不会被反复写入。
 
 ## Features
 
@@ -133,3 +137,9 @@ template_minify 属性
 ## 编译性能基准
 
 运行 `scripts/benchmark-compile.sh` 可测量最小、默认和 all-features 三种依赖图的冷 `cargo check` 时间与峰值内存。每次测量都使用独立的临时 target 目录，并排除依赖下载时间。
+
+单独测量依赖扫描耗时，不包含编译器启动和依赖构建：
+
+```sh
+cargo test --release --lib --locked benchmark_template_scanning -- --ignored --nocapture
+```

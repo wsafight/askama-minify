@@ -76,8 +76,12 @@ This expands to a minified source template:
 
 - Template files and their `include`, `extends`, and `import` dependencies are tracked through `include_str!`, so Cargo rebuilds when any source template changes.
 - Askama config files are tracked too. Template dependencies are resolved relative to the source template, recursively minified, and passed to Askama through isolated generated files.
+- Included HTML fragments retain boundary whitespace. If a dependency graph inserts fragments into whitespace-sensitive or raw-text contexts (`pre`, `textarea`, `script`, `style`, or attributes), or contains incomplete markup whose context cannot be determined, its templates are preserved conservatively. This also protects inherited blocks and imported macros in these contexts.
 - `html` and `htm` templates are minified as HTML. JavaScript without Askama syntax is parsed before it is minified; scripts containing Askama syntax or unsupported JavaScript are preserved unchanged.
+- JavaScript and advanced CSS minification fall back to the original content when the result could introduce an HTML end tag. Askama strings, nested comments, raw blocks, quoted HTML attributes, and non-ASCII whitespace are preserved.
 - The built-in CSS minifier preserves stylesheets containing custom-property syntax unchanged because custom-property token whitespace can be significant.
+- Necessary CSS comment boundaries are retained as empty comments rather than changed into selector whitespace.
+- Template file contents and compressed results are cached within each compiler process. File metadata changes invalidate the file cache; all original dependencies remain tracked, and identical generated files are not rewritten.
 
 ## Features
 
@@ -133,3 +137,9 @@ template_minify attribute
 ## Compile-time Benchmark
 
 Run `scripts/benchmark-compile.sh` to measure cold `cargo check` time and peak memory for the minimal, default, and all-features dependency graphs. Each measurement uses an isolated temporary target directory and excludes dependency download time.
+
+To measure dependency scanning separately from compiler startup and dependency builds:
+
+```sh
+cargo test --release --lib --locked benchmark_template_scanning -- --ignored --nocapture
+```
